@@ -99,18 +99,18 @@ class PatchSimple(object):
                 print Exception, e
 
     def start(self):
-        self.get_author_and_date()
-        # self.get_read_like_num()
+        # self.get_author_and_date()
+        self.get_read_like_num()
         self.update_db()
 
     def update_db(self):
         try:
-            gzh_id = self.get_gzh_id(self.author)
+            # gzh_id = self.get_gzh_id(self.author)
             gzh_patch = {
-                    'p_date': self.date,
-                    # 'read_num': self.read_num,
-                    # 'like_num': self.like_num,
-                    'gzh_id': gzh_id,
+                    # 'p_date': self.date,
+                    'read_num': self.read_num,
+                    'like_num': self.like_num,
+                    # 'gzh_id': gzh_id,
                     }
             print "gzh_patch:", gzh_patch
             db.update_table("wx_post_simple", gzh_patch, 'url_hash', self.url_hash)
@@ -118,7 +118,8 @@ class PatchSimple(object):
             print e
             print self.author
 
-    def get_gzh_id(self, name):
+    @staticmethod
+    def get_gzh_id(name):
         sql = 'select gzh_id from wx_gzh where gzh_name="%s"' % (name)
         print sql
         return db.query(sql)[0]['gzh_id']
@@ -143,8 +144,8 @@ def product_urls():
         count += 100
 
 
-def query_urls(count):
-    sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s' % (count, count+100)
+def query_urls(count, gzh_id = ''):
+    sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s and gzh_id=%s' % (count, count+100, GZH_ID)
     open('sql', 'a').write(sql)
     ds =  db.query(sql)
     urls = []
@@ -153,7 +154,15 @@ def query_urls(count):
     return urls
 
 
+GZH_ID = ''
+
+
 if __name__ == '__main__':
-    for urls in product_urls():
-        print len(urls)
-        serve_urls(urls)
+    from sys import argv
+    global GZH_ID
+    if len(argv) > 1:
+        gzh_name = argv[1]
+        GZH_ID = PatchSimple.get_gzh_id(gzh_name)
+        for urls in product_urls():
+            print len(urls)
+            serve_urls(urls)
