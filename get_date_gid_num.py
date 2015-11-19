@@ -27,8 +27,5 @@ class PatchSimple(object):
         self.read_num = j[u'appmsgstat'][u'read_num']
         self.like_num = j[u'appmsgstat'][u'like_num']
 
-
-
-
     def get_content(self):
         pass
