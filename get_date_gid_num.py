@@ -96,7 +96,7 @@ class PatchSimple(object):
                 self.date = ''
                 self.author = ''
             else:
-                print Exception, e
+                raise
 
     def start(self):
         self.get_author_and_date()
@@ -117,6 +117,7 @@ class PatchSimple(object):
         except Exception, e:
             print e
             print self.author
+            raise
 
     def get_gzh_id(self, name):
         sql = 'select gzh_id from wx_gzh where gzh_name="%s"' % (name)
@@ -134,18 +135,23 @@ def serve_urls(urls):
 
 
 def product_urls():
-    count = 2297
-    while count < 30000:
+    global COUNT
+    count = COUNT
+    while count > 2000:
+    # while count < 30000:
         urls = query_urls(count)
-        if len(urls) != 0:
+        len_urls = len(urls)
+        if len_urls != 0:
+            open('sql_get.log', 'a').write(str(len_urls) + '\n')
             print "[*] Count:", count
             yield urls
-        count += 100
+        count -= 100
 
 
 def query_urls(count):
-    sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s' % (count, count+100)
-    open('sql', 'a').write(sql)
+    sql = 'select p_url, url_hash from wx_post_simple where id <= %s and id > %s' % (count, count-100)
+    # sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s' % (count, count+100)
+    open('sql_get.log', 'a').write(sql)
     ds =  db.query(sql)
     urls = []
     for d in ds:
@@ -153,7 +159,11 @@ def query_urls(count):
     return urls
 
 
+COUNT = 9999999999
 if __name__ == '__main__':
+    from sys import argv
+    global COUNT
+    COUNT = int(argv[1])
     for urls in product_urls():
         print len(urls)
         serve_urls(urls)

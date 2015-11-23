@@ -19,10 +19,12 @@ LOGFILE = '/var/log/squid3/access.log'
 
 
 class PatchSimple(object):
-    def __init__(self, url, url_hash):
+    def __init__(self, url):
         self.headers = {'User-Agent': 'Mozilla/5.0 (Linux; U; Android 2.3.6; zh-cn; GT-S5660 Build/GINGERBREAD) AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1 MicroMessenger/4.5.255'}
-        self.p_url = url
-        self.url_hash = url_hash
+        self.p_url = url['p_url']
+        self.url_hash = url['url_hash']
+        self.gzh_id = url['gzh_id']
+        self.id = url['id']
 
     def parse_key_from_squid(self):
         lines = open(LOGFILE).readlines()
@@ -49,13 +51,24 @@ class PatchSimple(object):
         self.author = author
 
     def get_read_like_num(self):
-        pre_post_url = self.num_url.replace('mp.weixin.qq.com/s', 'mp.weixin.qq.com/mp/getappmsgext')
+        post_url = ''
+        pre_post_url = ''
+        pre_post_url = self.p_url.replace('#wechat_redirect', '')
+        pre_post_url = pre_post_url.replace('mp.weixin.qq.com/s', 'mp.weixin.qq.com/mp/getappmsgext')
+        # pre_post_url = self.num_url.replace('mp.weixin.qq.com/s', 'mp.weixin.qq.com/mp/getappmsgext')
         post_url = pre_post_url + '&f=json&uin=%s&key=%s' % (self.uin, self.key)
         print "[*] Post_url", post_url
+        gzh_name = self.get_gzh_name(self.gzh_id)
+        print "[*] gzh_name:", gzh_name, self.id
         r = requests.post(post_url, headers=self.headers)
         time.sleep(2)
         if 'appmsgstat' not in r.content:
+            time.sleep(30)
             self.wait_for_new_keys()
+            print '-' * 10
+            self.get_read_like_num()
+            print '-' * 10
+            return
         j = json.loads(r.content)
         self.read_num = j[u'appmsgstat'][u'read_num']
         self.like_num = j[u'appmsgstat'][u'like_num']
@@ -64,12 +77,15 @@ class PatchSimple(object):
         print "[**] The key is invalied,and not find new key, sleep per 5s."
         while 1:
             self.parse_key_from_squid()
+            print "ori_key:", self.ori_key
+            print "now_key:", self.key
             if self.key != self.ori_key:
                 self.ori_key = self.key
                 print "[*] Get new key, continue work!"
                 return
-            else: print "wait new key"
-            time.sleep(5)
+            else:
+                print "wait new key"
+                time.sleep(10)
 
     def mk_url(self):
         print self.p_url
@@ -83,8 +99,6 @@ class PatchSimple(object):
         self.ori_key = self.key
 
     def get_author_and_date(self):
-        self.mk_url()
-        print "[*] num_url:", self.num_url
         r = requests.get(self.num_url)
         time.sleep(1)
         open('content.html', 'w').write(r.content)
@@ -99,6 +113,8 @@ class PatchSimple(object):
                 print Exception, e
 
     def start(self):
+        self.mk_url()
+        print "[*] num_url:", self.num_url
         # self.get_author_and_date()
         self.get_read_like_num()
         self.update_db()
@@ -119,10 +135,10 @@ class PatchSimple(object):
             print self.author
 
     @staticmethod
-    def get_gzh_id(name):
-        sql = 'select gzh_id from wx_gzh where gzh_name="%s"' % (name)
+    def get_gzh_name(id):
+        sql = 'select gzh_name from wx_gzh where gzh_id="%s"' % (id)
         print sql
-        return db.query(sql)[0]['gzh_id']
+        return db.query(sql)[0]['gzh_name']
 
     def get_content(self):
         pass
@@ -130,23 +146,27 @@ class PatchSimple(object):
 
 def serve_urls(urls):
     for url in urls:
-        ps = PatchSimple(url['p_url'], url['url_hash'])
+        ps = PatchSimple(url)
         ps.start()
 
 
 def product_urls():
-    count = 2297
-    while count < 30000:
+    global COUNT, COUNT_MAX
+    count = COUNT
+    while count <= COUNT_MAX:
         urls = query_urls(count)
-        if len(urls) != 0:
+        len_urls = len(urls)
+        if len_urls != 0:
+            open('sql.log', 'a').write(str(len_urls) + '\n')
             print "[*] Count:", count
             yield urls
         count += 100
 
 
 def query_urls(count, gzh_id = ''):
-    sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s and gzh_id=%s' % (count, count+100, GZH_ID)
-    open('sql', 'a').write(sql)
+    sql = 'select id, p_url, gzh_id, url_hash from wx_post_simple where id >= %s and id < %s and gzh_id is not null and read_num is null' % (count, count+100)
+    # sql = 'select p_url, gzh_id url_hash from wx_post_simple where id >= %s and id < %s and gzh_id="%s"' % (count, count+100, GZH_ID)
+    open('sql.log', 'a').write(sql)
     ds =  db.query(sql)
     urls = []
     for d in ds:
@@ -154,15 +174,26 @@ def query_urls(count, gzh_id = ''):
     return urls
 
 
+cut = 0
+name = ''
 GZH_ID = ''
+COUNT = 999999999
+COUNT_MAX = 0
 
 
 if __name__ == '__main__':
+    '''COUNT is from count,
+    COUNT_MAX is limit count'''
+
     from sys import argv
-    global GZH_ID
+    global GZH_ID, COUNT
     if len(argv) > 1:
-        gzh_name = argv[1]
-        GZH_ID = PatchSimple.get_gzh_id(gzh_name)
+        # gzh_name = argv[1]
+        COUNT_MAX = int(argv[1])
+        COUNT = int(argv[2])
+        print COUNT
+        time.sleep(2)
+        # GZH_ID = PatchSimple.get_gzh_id(gzh_name)
         for urls in product_urls():
             print len(urls)
             serve_urls(urls)
