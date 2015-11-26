@@ -51,6 +51,11 @@ class PatchSimple(object):
         self.author = author
 
     def get_read_like_num(self):
+        if self.url_has_like_num():
+            import sys
+            print '\r has like num',
+            sys.stdout.flush()
+            return
         post_url = ''
         pre_post_url = ''
         pre_post_url = self.p_url.replace('#wechat_redirect', '')
@@ -72,7 +77,13 @@ class PatchSimple(object):
         j = json.loads(r.content)
         self.read_num = j[u'appmsgstat'][u'read_num']
         self.like_num = j[u'appmsgstat'][u'like_num']
+        self.update_db()
 
+    def url_has_like_num(self):
+        sql = 'select read_num from wx_post_simple where p_url="%s"' % self.p_url
+        if db.query(sql)[0]['read_num'] == None:
+            return False
+        return True
     def wait_for_new_keys(self):
         print "[**] The key is invalied,and not find new key, sleep per 5s."
         while 1:
@@ -117,7 +128,6 @@ class PatchSimple(object):
         print "[*] num_url:", self.num_url
         # self.get_author_and_date()
         self.get_read_like_num()
-        self.update_db()
 
     def update_db(self):
         try:

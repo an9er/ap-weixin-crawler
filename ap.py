@@ -95,6 +95,9 @@ class ApWeixin(object):
             self.push_db(title, url)
             count += 1
         print "[*] Push success:", count
+        if self.last_url == url:
+            print "[*] not more over"
+            exit()
         self.last_url = url
 
     def over_date(self):
@@ -126,7 +129,10 @@ class ApWeixin(object):
              'p_url': url,
              'url_hash': url_hash,
              }
-        db.item_to_table('wx_post_simple', d)
+        try:
+            db.item_to_table('wx_post_simple', d)
+        except Exception, e:
+            print Exception, e
 
 
 if __name__ == '__main__':

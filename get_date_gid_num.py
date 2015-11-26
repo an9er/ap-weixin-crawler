@@ -73,11 +73,12 @@ class PatchSimple(object):
 
     def mk_url(self):
         print self.p_url
-        self.parse_key_from_squid()
-        self.update_key()
-        pre_url_2 = '&uin=%s&key=%s'
+        # self.parse_key_from_squid()
+        # self.update_key()
+        # pre_url_2 = '&uin=%s&key=%s'
         pre_url = self.p_url.replace('#wechat_redirect', '')
-        self.num_url = pre_url + pre_url_2 % (self.uin, self.key)
+        self.num_url = pre_url
+        # self.num_url = pre_url + pre_url_2 % (self.uin, self.key)
 
     def update_key(self):
         self.ori_key = self.key
@@ -91,7 +92,7 @@ class PatchSimple(object):
         try:
             self.date = self.get_p_date(r.content)
             self.get_p_author(r.content)
-        except Exception, e:
+        except:
             if '该内容已被发布者删除' in r.content:
                 self.date = ''
                 self.author = ''
@@ -101,6 +102,9 @@ class PatchSimple(object):
     def start(self):
         self.get_author_and_date()
         # self.get_read_like_num()
+        if self.author == '':
+            print '删除'
+            return
         self.update_db()
 
     def update_db(self):
@@ -135,22 +139,22 @@ def serve_urls(urls):
 
 
 def product_urls():
-    global COUNT
+    global COUNT, MAX_COUNT
     count = COUNT
-    while count > 2000:
-    # while count < 30000:
+    # while count > 2000:
+    while count < MAX_COUNT:
         urls = query_urls(count)
         len_urls = len(urls)
         if len_urls != 0:
             open('sql_get.log', 'a').write(str(len_urls) + '\n')
             print "[*] Count:", count
             yield urls
-        count -= 100
+        count += 100
 
 
 def query_urls(count):
-    sql = 'select p_url, url_hash from wx_post_simple where id <= %s and id > %s' % (count, count-100)
-    # sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s' % (count, count+100)
+    # sql = 'select p_url, url_hash from wx_post_simple where id <= %s and id > %s' % (count, count-100)
+    sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s' % (count, count+100)
     open('sql_get.log', 'a').write(sql)
     ds =  db.query(sql)
     urls = []
@@ -159,7 +163,9 @@ def query_urls(count):
     return urls
 
 
-COUNT = 9999999999
+# COUNT = 9999999999
+COUNT = 0
+MAX_COUNT = 313750
 if __name__ == '__main__':
     from sys import argv
     global COUNT
