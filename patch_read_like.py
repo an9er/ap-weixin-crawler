@@ -8,6 +8,7 @@ import requests
 import toolkitv
 import dbconfig
 import time
+import sys
 
 db = toolkitv.MySQLUtility(
     dbconfig.mysql_host,
@@ -37,7 +38,8 @@ class PatchSimple(object):
             self.biz = m[0][0]
             self.uin = m[0][1]
             self.key = m[0][2]
-            print 'parse_key_from_squid:', m[0]
+            # print '\rparse_key_from_squid:', m[0],
+            sys.stdout.flush()
             break
 
     @staticmethod
@@ -52,9 +54,7 @@ class PatchSimple(object):
 
     def get_read_like_num(self):
         if self.url_has_like_num():
-            import sys
-            print '\r has like num',
-            sys.stdout.flush()
+            print 'has like num',
             return
         post_url = ''
         pre_post_url = ''
@@ -68,7 +68,7 @@ class PatchSimple(object):
         r = requests.post(post_url, headers=self.headers)
         time.sleep(2)
         if 'appmsgstat' not in r.content:
-            time.sleep(30)
+            time.sleep(10)
             self.wait_for_new_keys()
             print '-' * 10
             self.get_read_like_num()
@@ -88,14 +88,15 @@ class PatchSimple(object):
         print "[**] The key is invalied,and not find new key, sleep per 5s."
         while 1:
             self.parse_key_from_squid()
-            print "ori_key:", self.ori_key
-            print "now_key:", self.key
+            # print "ori_key:", self.ori_key
+            # print "now_key:", self.key
             if self.key != self.ori_key:
                 self.ori_key = self.key
                 print "[*] Get new key, continue work!"
                 return
             else:
-                print "wait new key"
+                print "\rwait new key",
+                sys.stdout.flush()
                 time.sleep(10)
 
     def mk_url(self):
