@@ -95,9 +95,9 @@ class ApWeixin(object):
             self.push_db(title, url)
             count += 1
         print "[*] Push success:", count
-        if self.last_url == url:
-            print "[*] not more over"
-            exit()
+        # if self.last_url == url:
+        #     print "[*] not more over"
+        #     exit()
         self.last_url = url
 
     def over_date(self):
@@ -106,7 +106,8 @@ class ApWeixin(object):
         time.sleep(3)
         open('zz.html', 'w').write(r.content)
         date = PatchSimple.get_p_date(r.content)
-        if int(date.split('-')[0]) < 2015:
+        if int(date.split('-')[1]) < 5:
+        # if int(date.split('-')[0]) < 2015:
             print date, "over"
             return True
         return False
@@ -130,7 +131,7 @@ class ApWeixin(object):
              'url_hash': url_hash,
              }
         try:
-            db.item_to_table('wx_post_simple', d)
+            db.item_to_table('wx_post_simple_huishi', d)
         except Exception, e:
             print Exception, e
 
