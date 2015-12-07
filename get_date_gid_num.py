@@ -8,6 +8,9 @@ import requests
 import toolkitv
 import dbconfig
 import time
+import htmlcontent
+hc = htmlcontent.HtmlContentor()
+from sentiment_weibo import get_sentiment
 
 db = toolkitv.MySQLUtility(
     dbconfig.mysql_host,
@@ -53,7 +56,7 @@ class PatchSimple(object):
         post_url = pre_post_url + '&f=json&uin=%s&key=%s' % (self.uin, self.key)
         print "[*] Post_url", post_url
         r = requests.post(post_url, headers=self.headers)
-        time.sleep(2)
+        time.sleep(1.3)
         if 'appmsgstat' not in r.content:
             self.wait_for_new_keys()
         j = json.loads(r.content)
@@ -83,24 +86,51 @@ class PatchSimple(object):
     def update_key(self):
         self.ori_key = self.key
 
-    def get_author_and_date(self):
+    def get_content(self, content):
+        _title, content = hc.get_content(content)
+        if content is None:
+            content = ''
+        self.data = content
+
+    def get_author_date_data_senti(self):
         self.mk_url()
         print "[*] num_url:", self.num_url
-        r = requests.get(self.num_url)
+        try:
+            r = requests.get(self.num_url)
+        except:
+            print "requests.get Error"
+            raise
+            # self.date = ''
+            # self.author = ''
+            # return
         time.sleep(1)
-        open('content.html', 'w').write(r.content)
+
+        with open('content.html', 'w') as f:
+            f.write(r.content)
+
         try:
             self.date = self.get_p_date(r.content)
             self.get_p_author(r.content)
+            self.get_content(r.content)
+            self.sentiment = get_sentiment(self.data)
         except:
+            print 222222222222222
             if '该内容已被发布者删除' in r.content:
                 self.date = ''
                 self.author = ''
-            else:
-                raise
+            if '其转载来源已删除' in r.content:
+                self.date = ''
+                self.author = ''
+            if '该内容已被发布者删除' in r.content:
+                self.date = ''
+                self.author = ''
+            # else:
+            #     self.date = ''
+            #     self.author = ''
+            raise
 
     def start(self):
-        self.get_author_and_date()
+        self.get_author_date_data_senti()
         # self.get_read_like_num()
         if self.author == '':
             print '删除'
@@ -112,12 +142,14 @@ class PatchSimple(object):
             gzh_id = self.get_gzh_id(self.author)
             gzh_patch = {
                     'p_date': self.date,
+                    'p_data': self.data,
                     # 'read_num': self.read_num,
                     # 'like_num': self.like_num,
                     'gzh_id': gzh_id,
+                    'sentiment': self.sentiment
                     }
-            print "gzh_patch:", gzh_patch
-            db.update_table("wx_post_simple", gzh_patch, 'url_hash', self.url_hash)
+            print "gzh_patch:", len(gzh_patch['p_data'])
+            db.update_table("wx_post_simple_huishi", gzh_patch, 'url_hash', self.url_hash)
         except Exception, e:
             print e
             print self.author
@@ -127,9 +159,6 @@ class PatchSimple(object):
         sql = 'select gzh_id from wx_gzh where gzh_name="%s"' % (name)
         print sql
         return db.query(sql)[0]['gzh_id']
-
-    def get_content(self):
-        pass
 
 
 def serve_urls(urls):
@@ -154,7 +183,9 @@ def product_urls():
 
 def query_urls(count):
     # sql = 'select p_url, url_hash from wx_post_simple where id <= %s and id > %s' % (count, count-100)
-    sql = 'select p_url, url_hash from wx_post_simple where id >= %s and id < %s' % (count, count+100)
+    sql = 'select p_url, url_hash from wx_post_simple_huishi where id >= %s and id < %s ' % (count, count+100)
+    # sql = 'select p_url, url_hash from wx_post_simple_huishi where id >= %s and id < %s and p_date is null' % (count, count+100)
+    print sql
     open('sql_get.log', 'a').write(sql)
     ds =  db.query(sql)
     urls = []
@@ -165,7 +196,7 @@ def query_urls(count):
 
 # COUNT = 9999999999
 COUNT = 0
-MAX_COUNT = 313750
+MAX_COUNT = 1656
 if __name__ == '__main__':
     from sys import argv
     global COUNT

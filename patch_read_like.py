@@ -80,12 +80,13 @@ class PatchSimple(object):
         self.update_db()
 
     def url_has_like_num(self):
-        sql = 'select read_num from wx_post_simple where p_url="%s"' % self.p_url
+        sql = 'select read_num from wx_post_simple_huishi where p_url="%s"' % self.p_url
         if db.query(sql)[0]['read_num'] == None:
             return False
         return True
     def wait_for_new_keys(self):
         print "[**] The key is invalied,and not find new key, sleep per 5s."
+        i = 0
         while 1:
             self.parse_key_from_squid()
             # print "ori_key:", self.ori_key
@@ -95,9 +96,10 @@ class PatchSimple(object):
                 print "[*] Get new key, continue work!"
                 return
             else:
-                print "\rwait new key",
+                print "\rwait new key %s" % ('.'*i),
                 sys.stdout.flush()
                 time.sleep(10)
+                i += 1
 
     def mk_url(self):
         print self.p_url
@@ -140,7 +142,7 @@ class PatchSimple(object):
                     # 'gzh_id': gzh_id,
                     }
             print "gzh_patch:", gzh_patch
-            db.update_table("wx_post_simple", gzh_patch, 'url_hash', self.url_hash)
+            db.update_table("wx_post_simple_huishi", gzh_patch, 'url_hash', self.url_hash)
         except Exception, e:
             print e
             print self.author
@@ -175,7 +177,7 @@ def product_urls():
 
 
 def query_urls(count, gzh_id = ''):
-    sql = 'select id, p_url, gzh_id, url_hash from wx_post_simple where id >= %s and id < %s and gzh_id is not null and read_num is null' % (count, count+100)
+    sql = 'select id, p_url, gzh_id, url_hash from wx_post_simple_huishi where id >= %s and id < %s and gzh_id is not null and read_num is null' % (count, count+100)
     # sql = 'select p_url, gzh_id url_hash from wx_post_simple where id >= %s and id < %s and gzh_id="%s"' % (count, count+100, GZH_ID)
     open('sql.log', 'a').write(sql)
     ds =  db.query(sql)
