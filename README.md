@@ -14,7 +14,7 @@ can crawler the gongzhonghao artical and read/like number.
 
 ps: 
 sentiment和data在get_date_git_num中修改
-ap.py中make_count修改count,来控制一次获取的url个数。
+ap.py中count固定为10，变更frommsgid来更改历史消息的内容
 
 
 
