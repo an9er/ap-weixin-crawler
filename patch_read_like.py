@@ -17,6 +17,7 @@ db = toolkitv.MySQLUtility(
     dbconfig.mysql_pass,
 )
 LOGFILE = '/var/log/squid3/access.log'
+TABLE = 'wx_post_simple'
 
 
 class PatchSimple(object):
@@ -62,7 +63,7 @@ class PatchSimple(object):
         pre_post_url = pre_post_url.replace('mp.weixin.qq.com/s', 'mp.weixin.qq.com/mp/getappmsgext')
         # pre_post_url = self.num_url.replace('mp.weixin.qq.com/s', 'mp.weixin.qq.com/mp/getappmsgext')
         post_url = pre_post_url + '&f=json&uin=%s&key=%s' % (self.uin, self.key)
-        print "[*] Post_url", post_url
+        # print "[*] Post_url", post_url
         gzh_name = self.get_gzh_name(self.gzh_id)
         print "[*] gzh_name:", gzh_name, self.id
         r = requests.post(post_url, headers=self.headers)
@@ -80,7 +81,8 @@ class PatchSimple(object):
         self.update_db()
 
     def url_has_like_num(self):
-        sql = 'select read_num from wx_post_simple_huishi where p_url="%s"' % self.p_url
+        global TABLE
+        sql = 'select read_num from %s where p_url="%s"' % (TABLE, self.p_url)
         if db.query(sql)[0]['read_num'] == None:
             return False
         return True
@@ -128,11 +130,12 @@ class PatchSimple(object):
 
     def start(self):
         self.mk_url()
-        print "[*] num_url:", self.num_url
+        # print "[*] num_url:", self.num_url
         # self.get_author_and_date()
         self.get_read_like_num()
 
     def update_db(self):
+        global TABLE
         try:
             # gzh_id = self.get_gzh_id(self.author)
             gzh_patch = {
@@ -142,7 +145,7 @@ class PatchSimple(object):
                     # 'gzh_id': gzh_id,
                     }
             print "gzh_patch:", gzh_patch
-            db.update_table("wx_post_simple_huishi", gzh_patch, 'url_hash', self.url_hash)
+            db.update_table(TABLE, gzh_patch, 'url_hash', self.url_hash)
         except Exception, e:
             print e
             print self.author
@@ -166,7 +169,9 @@ def serve_urls(urls):
 def product_urls():
     global COUNT, COUNT_MAX
     count = COUNT
+    print 'cc', count, COUNT, COUNT_MAX
     while count <= COUNT_MAX:
+        print "2"
         urls = query_urls(count)
         len_urls = len(urls)
         if len_urls != 0:
@@ -177,7 +182,8 @@ def product_urls():
 
 
 def query_urls(count, gzh_id = ''):
-    sql = 'select id, p_url, gzh_id, url_hash from wx_post_simple_huishi where id >= %s and id < %s and gzh_id is not null and read_num is null' % (count, count+100)
+    global TABLE
+    sql = 'select id, p_url, gzh_id, url_hash from %s where id >= %s and id < %s and gzh_id is not null and read_num is null' % (TABLE, count, count+100)
     # sql = 'select p_url, gzh_id url_hash from wx_post_simple where id >= %s and id < %s and gzh_id="%s"' % (count, count+100, GZH_ID)
     open('sql.log', 'a').write(sql)
     ds =  db.query(sql)
@@ -194,19 +200,32 @@ COUNT = 999999999
 COUNT_MAX = 0
 
 
-if __name__ == '__main__':
+def get_id_is_null(m):
+    global TABLE
+    sql = 'select %s(id) as mid from %s where like_num is null' % (m, TABLE)
+    return db.query(sql)[0]['mid']
+
+
+def go():
     '''COUNT is from count,
     COUNT_MAX is limit count'''
+    global GZH_ID, COUNT, COUNT_MAX
 
-    from sys import argv
-    global GZH_ID, COUNT
-    if len(argv) > 1:
-        # gzh_name = argv[1]
-        COUNT_MAX = int(argv[1])
-        COUNT = int(argv[2])
-        print COUNT
-        time.sleep(2)
-        # GZH_ID = PatchSimple.get_gzh_id(gzh_name)
-        for urls in product_urls():
-            print len(urls)
-            serve_urls(urls)
+    # from sys import argv
+    # if len(argv) > 1:
+    #     # gzh_name = argv[1]
+    #     COUNT_MAX = int(argv[1])
+    #     COUNT = int(argv[2])
+    COUNT_MAX = get_id_is_null('max')
+    COUNT = get_id_is_null('min')
+    print 'mid:', COUNT
+    print 'mad:', COUNT_MAX
+    time.sleep(2)
+    # GZH_ID = PatchSimple.get_gzh_id(gzh_name)
+    for urls in product_urls():
+        print len(urls)
+        serve_urls(urls)
+
+
+if __name__ == '__main__':
+    go()

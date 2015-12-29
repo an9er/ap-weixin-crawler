@@ -10,7 +10,7 @@ import dbconfig
 import time
 import htmlcontent
 hc = htmlcontent.HtmlContentor()
-from sentiment_weibo import get_sentiment
+# from sentiment_weibo import get_sentiment
 
 db = toolkitv.MySQLUtility(
     dbconfig.mysql_host,
@@ -19,6 +19,11 @@ db = toolkitv.MySQLUtility(
     dbconfig.mysql_pass,
 )
 LOGFILE = '/var/log/squid3/access.log'
+TABLE = 'wx_post_simple'
+
+
+COUNT = 9999999999
+MAX_COUNT = 0
 
 
 class PatchSimple(object):
@@ -42,9 +47,18 @@ class PatchSimple(object):
             break
 
     @staticmethod
-    def get_p_date(content):
-        p_date = re.search(r'media_meta_text">(.*?)<', content).groups()[0]
-        # year, month, day = re.search(r'media_meta_text">(\d*?)-(\d*?)-(\d*?)<', r.content'").groups()
+    def get_p_date(content, ap=False):
+        '''argv ap:
+            if ap is True get date format like: 2015-4-6,
+            if ap if False, the format is like: 2015-4-6 11:02:45. more jingque'''
+        if ap:
+            p_date = re.search(r'media_meta_text">(.*?)<', content).groups()[0]
+            return p_date
+        d = re.search(r'"(\d{10}?)"', content).groups()[0]
+        print d
+        ld = time.localtime(float(d))
+        p_date = time.strftime("%Y-%m-%d %H:%M:%S", ld)
+        # p_date = re.search(r'media_meta_text">(.*?)<', content).groups()[0]
         return p_date
 
     def get_p_author(self, content):
@@ -71,7 +85,8 @@ class PatchSimple(object):
                 self.ori_key = self.key
                 print "[*] Get new key, continue work!"
                 return
-            else: print "wait new key"
+            else:
+                print "wait new key"
             time.sleep(5)
 
     def mk_url(self):
@@ -90,14 +105,15 @@ class PatchSimple(object):
         _title, content = hc.get_content(content)
         if content is None:
             content = ''
-        self.data = content
+        # if you need artical you should add the follow sentence
+        # self.data = content
 
     def get_author_date_data_senti(self):
         self.mk_url()
         print "[*] num_url:", self.num_url
         try:
             r = requests.get(self.num_url)
-        except:
+        except requests.exceptions.MissingSchema:
             print "requests.get Error"
             raise
             # self.date = ''
@@ -112,7 +128,8 @@ class PatchSimple(object):
             self.date = self.get_p_date(r.content)
             self.get_p_author(r.content)
             self.get_content(r.content)
-            self.sentiment = get_sentiment(self.data)
+            # if you want the sentiment you should add this
+            # self.sentiment = get_sentiment(self.data)
         except:
             print 222222222222222
             if '该内容已被发布者删除' in r.content:
@@ -130,26 +147,27 @@ class PatchSimple(object):
             raise
 
     def start(self):
-        self.get_author_date_data_senti()
-        # self.get_read_like_num()
-        if self.author == '':
+        try:
+            self.get_author_date_data_senti()
+            self.update_db()
+        except requests.exceptions.MissingSchema:
             print '删除'
-            return
-        self.update_db()
 
     def update_db(self):
+        global TABLE
         try:
             gzh_id = self.get_gzh_id(self.author)
             gzh_patch = {
                     'p_date': self.date,
-                    'p_data': self.data,
                     # 'read_num': self.read_num,
                     # 'like_num': self.like_num,
                     'gzh_id': gzh_id,
-                    'sentiment': self.sentiment
+                    # if you want data and sentiment you should fix another get_data and get_sentiment
+                    # 'p_data': self.data,
+                    # 'sentiment': self.sentiment
                     }
-            print "gzh_patch:", len(gzh_patch['p_data'])
-            db.update_table("wx_post_simple_huishi", gzh_patch, 'url_hash', self.url_hash)
+            # print "gzh_patch:", len(gzh_patch['p_data'])
+            db.update_table(TABLE, gzh_patch, 'url_hash', self.url_hash)
         except Exception, e:
             print e
             print self.author
@@ -182,25 +200,38 @@ def product_urls():
 
 
 def query_urls(count):
+    global TABLE
     # sql = 'select p_url, url_hash from wx_post_simple where id <= %s and id > %s' % (count, count-100)
-    sql = 'select p_url, url_hash from wx_post_simple_huishi where id >= %s and id < %s ' % (count, count+100)
-    # sql = 'select p_url, url_hash from wx_post_simple_huishi where id >= %s and id < %s and p_date is null' % (count, count+100)
+    sql = 'select p_url, url_hash from %s where id >= %s and id < %s ' % (TABLE, count, count+100)
     print sql
     open('sql_get.log', 'a').write(sql)
-    ds =  db.query(sql)
+    ds = db.query(sql)
     urls = []
     for d in ds:
         urls.append(d)
     return urls
 
 
-# COUNT = 9999999999
-COUNT = 0
-MAX_COUNT = 1656
-if __name__ == '__main__':
-    from sys import argv
-    global COUNT
-    COUNT = int(argv[1])
+def get_id_is_null(m):
+    global TABLE
+    sql = 'select %s(id) as mid from %s where p_date is null' % (m, TABLE)
+    return db.query(sql)[0]['mid']
+
+
+def go():
+    # from sys import argv
+    global COUNT, MAX_COUNT
+    # COUNT = int(argv[1])
+    # MAX_COUNT = int(argv[2])
+    COUNT = get_id_is_null('min')
+    print 'mid', COUNT
+    MAX_COUNT = get_id_is_null('max')
+    print 'mad', MAX_COUNT
+    time.sleep(2)
     for urls in product_urls():
         print len(urls)
         serve_urls(urls)
+
+
+if __name__ == '__main__':
+    go()

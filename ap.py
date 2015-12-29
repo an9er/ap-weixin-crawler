@@ -9,6 +9,7 @@ import toolkitv
 import time
 from get_date_gid_num import PatchSimple
 import dbconfig
+import sys
 db = toolkitv.MySQLUtility(
     dbconfig.mysql_host,
     dbconfig.mysql_db,
@@ -17,18 +18,14 @@ db = toolkitv.MySQLUtility(
 )
 
 
+TABLE = 'wx_post_simple'
+
+
 class ApWeixin(object):
     def __init__(self, count=10, logfile=''):
         self.count = count
         self.logfile = logfile
-
-    def get_parameter(self):
-        '''get key uni etc..'''
-        pass
-
-    def get_history_list(self):
-        '''get wx-posts from history list'''
-        pass
+        self.frommsgid = ''
 
     def parse_key_from_squid(self):
         lines = open(self.logfile).readlines()
@@ -58,35 +55,54 @@ class ApWeixin(object):
         self.list_go()
 
     def list_go(self):
-        for count in self.make_count():
-            self.get_artical_urls(count)
-            print "[*] To serve count:", count
+        while True:
+            self.get_history_list()
             if self.over_date():
-                print "[*] Over"
+                print "[*] date over"
                 break
+            print "[*] msgid:", self.frommsgid
+        print "[*] Over"
 
-    def get_artical_urls(self, count):
-        url = self.pre_url + '&count=%s' % count
-        r = requests.get(url)
+    def get_history_list(self):
+        '''get url list and last frommsgid from history list'''
+
+        if self.frommsgid == '':
+            txt = ''
+        else:
+            txt = '&frommsgid={0}'.format(self.frommsgid)
+        url = self.pre_url + '&count=10' + txt
+        print "url-count", url
+        headers = {
+            'User-Agent':'Mozilla/5.0 (Linux; U; Android 2.3.6; zh-cn; GT-S5660 Build/GINGERBREAD) AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1 MicroMessenger/4.5.255'}
+        r = requests.get(url, headers=headers)
         if 'no session' in r.content:
             self.wait_for_new_keys()
-
-        self.get_urls_via_json(r.content)
+        self.get_urls_msgid_via_json(r.content)
 
     def wait_for_new_keys(self):
-        print "[**] The key is invirified,and not find new key, sleep per 5s."
+        print "[**] The key is invalied,and not find new key, sleep per 5s."
+        i = 0
         while 1:
             self.parse_key_from_squid()
+            # print "ori_key:", self.ori_key
+            # print "now_key:", self.key
             if self.key != self.ori_key:
                 self.ori_key = self.key
                 print "[*] Get new key, continue work!"
                 return
-            time.sleep(5)
+            else:
+                print "\rwait new key %s" % ('.'*i),
+                sys.stdout.flush()
+                time.sleep(10)
+                i += 1
 
-    def get_urls_via_json(self, content):
+    def get_urls_msgid_via_json(self, content):
         s = content.replace('\"', '"')
         s = s.replace('\\', '')
         s = s.replace('amp;', '')
+        with open('json.json', 'w') as f:
+            f.write(s)
+        self.get_msgid_via_json(s)
         rre = re.findall(r'title":"(.*?)".*?content_url":"(.*?)"', s)
         count = 0
         url = ''
@@ -95,28 +111,30 @@ class ApWeixin(object):
             self.push_db(title, url)
             count += 1
         print "[*] Push success:", count
+        self.last_url = url
+
+    def get_msgid_via_json(self, content):
+        data = re.findall(r'"id":(\d+?),', content)
+        self.frommsgid = data[-1]
         # if self.last_url == url:
         #     print "[*] not more over"
         #     exit()
-        self.last_url = url
 
     def over_date(self):
         r = requests.get(self.last_url)
         print self.last_url
         time.sleep(3)
-        open('zz.html', 'w').write(r.content)
-        date = PatchSimple.get_p_date(r.content)
-        if int(date.split('-')[1]) < 5:
-        # if int(date.split('-')[0]) < 2015:
+        # open('zz.html', 'w').write(r.content)
+        date = PatchSimple.get_p_date(r.content, ap=True)
+        print "date", date
+        # day = int(date.split('-')[2])
+        month = int(date.split('-')[1])
+        year = int(date.split('-')[0])
+        if year < 2015 or month < 12:
+        # if year < 2015 or month < 12 or day < 27:
             print date, "over"
             return True
         return False
-
-    def make_count(self):
-        count = 30
-        while count < 10000:
-            yield count
-            count += 30
 
     def get_read_num(self):
         pass
@@ -125,18 +143,27 @@ class ApWeixin(object):
         pass
 
     def push_db(self, title, url):
+        global TABLE
+        if 'mp.weixin.qq.com' not in url:
+            print "not mp url"
+            return
+
         url_hash = fnvhash.fnv_32a_str(url)
         d = {'title': title,
              'p_url': url,
              'url_hash': url_hash,
              }
         try:
-            db.item_to_table('wx_post_simple_huishi', d)
+            db.item_to_table(TABLE, d)
         except Exception, e:
             print Exception, e
 
 
-if __name__ == '__main__':
+def main():
     logfile = '/var/log/squid3/access.log'
     aw = ApWeixin(count=10, logfile=logfile)
     aw.start()
+
+
+if __name__ == '__main__':
+    main()
