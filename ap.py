@@ -9,6 +9,7 @@ import toolkitv
 import time
 from get_date_gid_num import PatchSimple
 import dbconfig
+import config
 import sys
 db = toolkitv.MySQLUtility(
     dbconfig.mysql_host,
@@ -18,7 +19,7 @@ db = toolkitv.MySQLUtility(
 )
 
 
-TABLE = 'wx_post_simple'
+TABLE = config.table
 
 
 class ApWeixin(object):
@@ -127,11 +128,11 @@ class ApWeixin(object):
         # open('zz.html', 'w').write(r.content)
         date = PatchSimple.get_p_date(r.content, ap=True)
         print "date", date
-        # day = int(date.split('-')[2])
+        day = int(date.split('-')[2])
         month = int(date.split('-')[1])
         year = int(date.split('-')[0])
-        if year < 2015 or month < 12:
-        # if year < 2015 or month < 12 or day < 27:
+        # if year < 20:16 and month < 12:
+        if year < 2014:
             print date, "over"
             return True
         return False

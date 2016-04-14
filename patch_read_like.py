@@ -9,6 +9,7 @@ import toolkitv
 import dbconfig
 import time
 import sys
+import config
 
 db = toolkitv.MySQLUtility(
     dbconfig.mysql_host,
@@ -17,7 +18,7 @@ db = toolkitv.MySQLUtility(
     dbconfig.mysql_pass,
 )
 LOGFILE = '/var/log/squid3/access.log'
-TABLE = 'wx_post_simple'
+TABLE = config.table
 
 
 class PatchSimple(object):

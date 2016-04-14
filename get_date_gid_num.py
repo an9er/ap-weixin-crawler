@@ -8,18 +8,15 @@ import requests
 import toolkitv
 import dbconfig
 import time
+import config
 import htmlcontent
 hc = htmlcontent.HtmlContentor()
 # from sentiment_weibo import get_sentiment
 
-db = toolkitv.MySQLUtility(
-    dbconfig.mysql_host,
-    dbconfig.mysql_db,
-    dbconfig.mysql_user,
-    dbconfig.mysql_pass,
-)
+db = toolkitv.MySQLUtility( dbconfig.mysql_host, dbconfig.mysql_db, dbconfig.mysql_user, dbconfig.mysql_pass,)
+
 LOGFILE = '/var/log/squid3/access.log'
-TABLE = 'wx_post_simple'
+TABLE = config.table
 
 
 COUNT = 9999999999
@@ -106,7 +103,7 @@ class PatchSimple(object):
         if content is None:
             content = ''
         # if you need artical you should add the follow sentence
-        # self.data = content
+        self.data = content
 
     def get_author_date_data_senti(self):
         self.mk_url()
@@ -116,9 +113,6 @@ class PatchSimple(object):
         except requests.exceptions.MissingSchema:
             print "requests.get Error"
             raise
-            # self.date = ''
-            # self.author = ''
-            # return
         time.sleep(1)
 
         with open('content.html', 'w') as f:
@@ -134,27 +128,27 @@ class PatchSimple(object):
             print 222222222222222
             if '该内容已被发布者删除' in r.content:
                 self.date = ''
+                self.data = ''
                 self.author = ''
             if '其转载来源已删除' in r.content:
                 self.date = ''
+                self.data = ''
                 self.author = ''
             if '该内容已被发布者删除' in r.content:
                 self.date = ''
+                self.data = ''
                 self.author = ''
-            # else:
-            #     self.date = ''
-            #     self.author = ''
-            raise
+            else:
+                self.date = ''
+                self.data = ''
+                self.author = ''
 
     def start(self):
-        try:
-            self.get_author_date_data_senti()
-            self.update_db()
-        except requests.exceptions.MissingSchema:
-            print '删除'
+        self.get_author_date_data_senti()
+        self.update_db()
 
     def update_db(self):
-        global TABLE
+        global TABLE, db
         try:
             gzh_id = self.get_gzh_id(self.author)
             gzh_patch = {
@@ -163,15 +157,13 @@ class PatchSimple(object):
                     # 'like_num': self.like_num,
                     'gzh_id': gzh_id,
                     # if you want data and sentiment you should fix another get_data and get_sentiment
-                    # 'p_data': self.data,
+                    'p_data': self.data,
                     # 'sentiment': self.sentiment
                     }
-            # print "gzh_patch:", len(gzh_patch['p_data'])
+        # print "gzh_patch:", len(gzh_patch['p_data'])
             db.update_table(TABLE, gzh_patch, 'url_hash', self.url_hash)
-        except Exception, e:
-            print e
-            print self.author
-            raise
+        except:
+            print "update errot"
 
     def get_gzh_id(self, name):
         sql = 'select gzh_id from wx_gzh where gzh_name="%s"' % (name)
@@ -182,7 +174,10 @@ class PatchSimple(object):
 def serve_urls(urls):
     for url in urls:
         ps = PatchSimple(url['p_url'], url['url_hash'])
-        ps.start()
+        try:
+            ps.start()
+        except:
+            raise
 
 
 def product_urls():
@@ -203,7 +198,6 @@ def query_urls(count):
     global TABLE
     # sql = 'select p_url, url_hash from wx_post_simple where id <= %s and id > %s' % (count, count-100)
     sql = 'select p_url, url_hash from %s where id >= %s and id < %s ' % (TABLE, count, count+100)
-    print sql
     open('sql_get.log', 'a').write(sql)
     ds = db.query(sql)
     urls = []
